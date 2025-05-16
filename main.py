@@ -1,5 +1,6 @@
-from qiskit import QuantumCircuit
-from qiskit_aer import AerSimulator
+from qiskit import QuantumCircuit, transpile
+from qiskit_ibm_runtime import QiskitRuntimeService, Sampler
+# from qiskit_aer import AerSimulator
 
 class Tiktactoe:
   def __init__(self):
@@ -8,11 +9,18 @@ class Tiktactoe:
     self.compToken = ''
     self.usersTurn = False
 
-  def quantumNumberGenerator(self, circ, simulator):
-    result = simulator.run(circ, shots=1).result()
-    counts = result.get_counts()
-    num = int(list(counts.keys())[0], 2)
-    return num + 1
+  def quantumNumberGenerator(self, circ, backend, sampler):
+    transpiled_circuit = transpile(circ, backend=backend)
+
+    job = sampler.run([transpiled_circuit])
+    result = job.result()
+    dist = result[0].data.c.get_counts().keys()
+    binary = list(dist)[0]
+    decimal = int(binary, 2)
+    # counts = job.result().get_memory()
+    # num = int(list(counts.keys())[0], 2)
+
+    return decimal + 1
 
   def updateLocation(self, value, token):
     changed = False
@@ -54,12 +62,16 @@ class Tiktactoe:
 
   def reset_game(self):
     self.board = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    self.userToken = input("would you like to be x's or O's? (enter x or O): ")
+    self.userToken = input("would you like to be x's or o's? (enter x or o): ")
     self.compToken = 'o' if self.userToken == 'x' else 'x'
     self.usersTurn = (self.userToken == 'x')
 
   def main(self):
     """Main function to run the command-line program."""
+    service = QiskitRuntimeService(channel="ibm_quantum", token="beea75a591e1c2a59371c780418fda3473317a37bc48a1f0b8197b5b0f999ffb68707fcf2c00dc052ef340b6d0cc32faff314cce420969aeeac8f0e3923480ac")
+ 
+    # backend = service.least_busy(simulator=False, operational=True)
+    backend = service.backend(name="ibm_brisbane")
 
     username = input("enter your username: ")
     self.reset_game()
@@ -69,13 +81,15 @@ class Tiktactoe:
     num_qubits = 3
 
     circ = QuantumCircuit(num_qubits, num_qubits)
+    # added a Hadamard gate to all the qubits
+    # this will create a superposition state
     circ.h(range(num_qubits))
     circ.measure(range(num_qubits), range(num_qubits))
+    sampler = Sampler(mode=backend)
 
-    simulator = AerSimulator()
+    # simulator = AerSimulator()
 
     # counts = quantumNumberGenerator(circ, simulator)
-    # print(counts)
 
     self.print_board()
     playGame = True
@@ -91,11 +105,13 @@ class Tiktactoe:
         self.usersTurn = not self.usersTurn
       else:
          print("TURN OF: QUANTUM COMPUTER")
-         location = self.quantumNumberGenerator(circ, simulator)
+        #  location = self.quantumNumberGenerator(circ, simulator)
+         location = self.quantumNumberGenerator(circ, backend, sampler)
          self.usersTurn = not self.usersTurn
          changed = self.updateLocation(location, token)
          while not changed:
-           location = self.quantumNumberGenerator(circ, simulator)
+          #  location = self.quantumNumberGenerator(circ, simulator)
+           location = self.quantumNumberGenerator(circ, backend, sampler)
            changed = self.updateLocation(location, token)
       self.print_board()
       winner = self.checkTie()
